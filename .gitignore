@@ -1,0 +1,12 @@
+# Python byte-compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Cachés de pytest y coverage
+.pytest_cache/
+htmlcov/
+
+# Entornos virtuales (si aplica)
+venv/
+.env/
