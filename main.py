@@ -2,7 +2,7 @@ import os
 import asyncio
 import concurrent.futures
 from concurrent.futures.process import BrokenProcessPool
-from fastapi import FastAPI, UploadFile, File, Path, HTTPException
+from fastapi import FastAPI, UploadFile, File, Path, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 import optimizer as optimizer
@@ -10,10 +10,14 @@ import traceback
 
 
 app = FastAPI()
+
+origins = [
+    "http://localhost:5173",
+]
 # Permitir CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -138,3 +142,47 @@ async def optimizar(
 @app.get("/ping")
 async def ping():
     return {"message": "pong"}
+
+from typing import List, Dict, Any, Optional
+from pydantic import BaseModel, Field
+from services.postprocess import move_orders, add_truck, delete_truck, compute_stats
+
+class PostProcessRequest(BaseModel):
+    camiones: List[Dict[str, Any]]              = Field(default_factory=list)
+    pedidos_no_incluidos: List[Dict[str, Any]]  = Field(default_factory=list)
+    pedidos: Optional[List[Dict[str, Any]]]     = Field(default_factory=list)
+    target_truck_id: Optional[str]              = None
+    cd: Optional[List[str]]                     = Field(default_factory=list)
+    ce: Optional[List[str]]                     = Field(default_factory=list)
+    ruta: Optional[str]                         = None
+
+
+class PostProcessResponse(BaseModel):
+    camiones: List[Dict[str, Any]]
+    pedidos_no_incluidos: List[Dict[str, Any]]
+    estadisticas: Dict[str, Any]
+
+@app.post("/postprocess/move_orders", response_model=PostProcessResponse)
+async def api_move_orders(req: PostProcessRequest = Body(...)):
+    state = {"camiones": req.camiones, "pedidos_no_incluidos": req.pedidos_no_incluidos}
+    result = move_orders(state, req.pedidos, req.target_truck_id)
+    return result
+
+@app.post("/postprocess/add_truck", response_model=PostProcessResponse)
+async def api_add_truck(req: PostProcessRequest = Body(...)):
+    state = {"camiones": req.camiones, "pedidos_no_incluidos": req.pedidos_no_incluidos}
+    result = add_truck(state, req.cd, req.ce, req.ruta)
+    return result
+
+@app.post("/postprocess/delete_truck", response_model=PostProcessResponse)
+async def api_delete_truck(req: PostProcessRequest = Body(...)):
+    state = {"camiones": req.camiones, "pedidos_no_incluidos": req.pedidos_no_incluidos}
+    result = delete_truck(state, req.target_truck_id)
+    return result
+
+@app.post("/postprocess/compute_stats", response_model=Dict[str, Any])
+async def api_compute_stats(req: PostProcessRequest = Body(...)):
+    nulls = [k for k,v in req.dict().items() if v is None]
+    if nulls:
+        print(f"[WARN] Campos nulos en compute_stats: {nulls}")
+    return compute_stats(req.camiones, req.pedidos_no_incluidos)

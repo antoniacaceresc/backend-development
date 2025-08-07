@@ -65,5 +65,10 @@ def process_dataframe(df_full: pd.DataFrame, client_config, cliente:str, venta: 
     df_proc["FLEXIBLE"]     = pd.to_numeric(df_proc["FLEXIBLE"], errors="coerce")
     df_proc["NO_APILABLE"]  = pd.to_numeric(df_proc["NO_APILABLE"], errors="coerce")
 
- 
+    for flag in ["VALIOSO", "PDQ"]:
+        if flag in df_proc.columns:
+            df_proc[flag] = (pd.to_numeric(df_proc[flag], errors="coerce").fillna(0).astype(int).clip(0, 1))
+        else:
+            df_proc[flag] = 0
+            
     return df_proc, raw_pedidos

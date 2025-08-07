@@ -40,6 +40,7 @@ class CencosudConfig:
             "FLEXIBLE": "Flexible",
             "NO_APILABLE": "No Apilable",
             "VALIOSO": "Valioso Cencosud",
+            "PDQ": "PDQ"
         },
         "Purina": {
             "CD": "CD",

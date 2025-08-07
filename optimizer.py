@@ -374,12 +374,8 @@ def optimizar_vcu( df_g, raw_pedidos, grupo_cfg, client_config, tiempo_max_seg,
     else:
         oc_map = {i: None for i in pedidos}
     
-    if 'VALIOSO' in df_g.columns:
-        df_g['VALIOSO'] = (pd.to_numeric(df_g['VALIOSO'], errors='coerce').fillna(0).astype(int).clip(0,1))
-    else:
-        df_g['VALIOSO'] = 0
     valuable_map = dict(zip(pedidos, df_g['VALIOSO']))
- 
+    pdq_map = dict(zip(pedidos, df["PDQ"]))
     pallets_conf_map    = dict(zip(pedidos, df['PALLETS']))
 
     # MAPEOS DE APILABILIDAD
@@ -635,6 +631,7 @@ def optimizar_vcu( df_g, raw_pedidos, grupo_cfg, client_config, tiempo_max_seg,
                 'VCU_PESO':     vcu_peso_i,
                 'CHOCOLATES':   chocolates_map[i],
                 'VALIOSO':      valuable_map[i],
+                'PDQ':          pdq_map[i],
                 'PO':           po_map[i],
                 'OC':           oc_map[i],
                 'PALLETS':      pallets_conf_map[i],
@@ -649,23 +646,25 @@ def optimizar_vcu( df_g, raw_pedidos, grupo_cfg, client_config, tiempo_max_seg,
         tiene_chocolates = any(chocolates_map.get(i) == 'SI' for i in grp)
         pallets_conf = sum(pallets_conf_map[i] for i in grp)
         valioso = any(valuable_map.get(i) == 1 for i in grp)
+        pdq = any(pdq_map.get(i) == 1 for i in grp)
        
         camiones.append({
-            'id':         uuid.uuid4().hex,
-            'grupo':      grupo_cfg['id'],
-            'tipo_ruta':  grupo_cfg['tipo'],
-            'ce':         grupo_cfg['ce'],
-            'cd':         grupo_cfg['cd'],
-            'tipo_camion': tt,
-            'vcu_vol':    vcu_vol_j,
-            'vcu_peso':   vcu_peso_j,
-            'vcu_max':    vcu_max_j,
-            'chocolates': tiene_chocolates,
-            'skus_valiosos': valioso,
-            'valor_total': valor_total,
-            'valor_cafe': valor_cafe,
-            'pallets_conf': pallets_conf,
-            'pedidos':    datos_asig
+            'id':               uuid.uuid4().hex,
+            'grupo':            grupo_cfg['id'],
+            'tipo_ruta':        grupo_cfg['tipo'],
+            'ce':               grupo_cfg['ce'],
+            'cd':               grupo_cfg['cd'],
+            'tipo_camion':      tt,
+            'vcu_vol':          vcu_vol_j,
+            'vcu_peso':         vcu_peso_j,
+            'vcu_max':          vcu_max_j,
+            'chocolates':       tiene_chocolates,
+            'skus_valiosos':    valioso,
+            'pdq':              pdq,
+            'valor_total':      valor_total,
+            'valor_cafe':       valor_cafe,
+            'pallets_conf':     pallets_conf,
+            'pedidos':          datos_asig
         })
         idx_cam += 1
  
@@ -727,11 +726,8 @@ def optimizar_bin(df_g, raw_pedidos, grupo_cfg, client_config, tiempo_max_seg, v
     else:
         chocolates_map = {i: "NO" for i in pedidos}
     
-    if 'VALIOSO' in df_g.columns:
-        df_g['VALIOSO'] = (pd.to_numeric(df_g['VALIOSO'], errors='coerce').fillna(0).astype(int).clip(0,1))
-    else:
-        df_g['VALIOSO'] = 0
     valuable_map = dict(zip(pedidos, df_g['VALIOSO']))
+    pdq_map = dict(zip(pedidos, df_g["PDQ"]))
  
     # MAPEOS DE APILABILIDAD
     base_map        = dict(zip(pedidos, df_g['BASE']))
@@ -901,11 +897,12 @@ def optimizar_bin(df_g, raw_pedidos, grupo_cfg, client_config, tiempo_max_seg, v
     t0 = time.time()
     resultado = solver.Solve(model)
     t1 = time.time()
-    print(f"[TIMING] CP-SAT (Bin) grupo {grupo_cfg['id']}: {t1 - t0:.3f} s (límite: {tiempo_max_seg}s)")
- 
+
     status_map = {cp_model.OPTIMAL: 'OPTIMAL', cp_model.FEASIBLE: 'FEASIBLE'}
     estado = status_map.get(resultado, 'NO_SOLUTION')
+    print(f"[TIMING] CP-SAT (Bin) grupo {grupo_cfg['id']}: {t1 - t0:.3f} s (límite: {tiempo_max_seg}s), estado: {estado}")
  
+
     # ---------------------------------------------
     # 7) Reconstruir salida
     pedidos_incluidos = [i for i in pedidos if any(solver.Value(x[(i, j)]) == 1 for j in range(n_cam))]
@@ -933,21 +930,22 @@ def optimizar_bin(df_g, raw_pedidos, grupo_cfg, client_config, tiempo_max_seg, v
             vcu_peso_i = (peso_raw[i] / float(cap_peso)) if cap_peso else 0.0
        
             pedido_min = {
-                'PEDIDO': i,
-                'CAMION': idx_cam,
-                'GRUPO': grupo_cfg['id'],
-                'TIPO_RUTA': grupo_cfg['tipo'],
+                'PEDIDO':       i,
+                'CAMION':       idx_cam,
+                'GRUPO':        grupo_cfg['id'],
+                'TIPO_RUTA':    grupo_cfg['tipo'],
                 'TIPO_CAMION': 'normal',
-                'CE': ce_map[i],
-                'CD': cd_map[i],
-                'VCU_VOL': vcu_vol_i,
-                'VCU_PESO': vcu_peso_i,
+                'CE':           ce_map[i],
+                'CD':           cd_map[i],
+                'VCU_VOL':      vcu_vol_i,
+                'VCU_PESO':     vcu_peso_i,
                 'CHOCOLATES':   chocolates_map[i],
                 'VALIOSO':      valuable_map[i],
-                'PO': po_map[i],
-                'OC': oc_map[i],
-                'PALLETS':  pallets_conf_map[i],
-                'VALOR': valor_map[i]
+                'PDQ':          pdq_map[i],
+                'PO':           po_map[i],
+                'OC':           oc_map[i],
+                'PALLETS':      pallets_conf_map[i],
+                'VALOR':        valor_map[i]
             }
             # 9.4) Completar con todas las columnas internas
             pedido_completo = completar_metadata_pedido(pedido_min, raw_map)
@@ -958,6 +956,7 @@ def optimizar_bin(df_g, raw_pedidos, grupo_cfg, client_config, tiempo_max_seg, v
         tiene_chocolates = any(chocolates_map.get(i) == 'SI' for i in grp)
         pallets_conf = sum(pallets_conf_map[i] for i in grp)
         valioso = any(valuable_map.get(i) == 1 for i in grp)
+        pdq = any(pdq_map.get(i) == 1 for i in grp)
 
         camiones.append({
             'id': uuid.uuid4().hex,
@@ -971,6 +970,7 @@ def optimizar_bin(df_g, raw_pedidos, grupo_cfg, client_config, tiempo_max_seg, v
             'vcu_max': vcu_max_j,
             'chocolates': tiene_chocolates,
             'skus_valiosos': valioso,
+            'pdq': pdq,
             'valor_total': valor_total,
             'valor_cafe': valor_cafe,
             'pallets_conf': pallets_conf,

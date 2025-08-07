@@ -45,8 +45,8 @@ class WalmartConfig:
             "BASE": "Base",
             "SUPERIOR": "Superior",
             "FLEXIBLE": "Flexible",
-            "NO_APILABLE": "No Apilable"
-            #"PDQ"; "Suma de PDQ"
+            "NO_APILABLE": "No Apilable",
+            "PDQ": "PDQ"
 
         },
         "Purina": {
